@@ -1,0 +1,1 @@
+This app uses [Google's geofencing library](https://developer.android.com/training/location/geofencing.html) to know when you enter and leave certain areas. It store this data over time and will hopefully present it in meaningful ways.
