@@ -46,4 +46,9 @@ public class Event extends RealmObject {
     }
 
     private boolean entered;
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof Event && ((Event) obj).getName().equals(getName());
+    }
 }

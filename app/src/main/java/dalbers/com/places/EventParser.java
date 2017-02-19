@@ -9,11 +9,13 @@ import java.util.Date;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import dalbers.com.places.realm.Event;
 import io.realm.RealmResults;
+import timber.log.Timber;
 
 /**
  * Created by davidalbers on 1/23/17.
@@ -21,40 +23,101 @@ import io.realm.RealmResults;
 
 public class EventParser {
 
-    private static final int MINIMUM_DWELL_TIME_MINUTES = 5;
+    private static final int MINIMUM_DWELL_TIME_MINUTES = 15;
 
-    static String rawEnterExitsToTimeSpent(RealmResults<Event> events) {
+    private enum State {
+        WAITING_ENTRY,
+        INSIDE,
+        WAITING_NEXT
+    }
+
+    static String rawEnterExitsToTimeSpent(@NonNull RealmResults<Event> events) {
         StringBuilder eventsAsString = new StringBuilder(events.size() * 10);
-        boolean insidePlace = false;
-        Event entryEvent = null;
+
+        if (events.isEmpty())
+            return "";
+
+        Event entryEvent = events.get(0);
+        Event previousEvent = events.get(0);
+        State state = State.WAITING_ENTRY;
         for (Event event : events) {
-            if (event.isEntered() && !insidePlace) {
-                //entered a new place
-                insidePlace = true;
-                entryEvent = event;
+            Timber.v("Event %s @%s",event.getName(), event.getDate().toString());
+            switch (state) {
+                case WAITING_ENTRY:
+                    Timber.v(" waiting entry");
+                    if (event.isEntered()) {
+                        state = State.INSIDE;
+                        entryEvent = event;
+                    }
+                    break;
+                case INSIDE:
+                    if (event.equals(entryEvent)) {
+                        Map<TimeUnit, Long> timeDwelled =
+                                computeDiff(entryEvent.getDate(), event.getDate());
+                        if (isLongEnough(MINIMUM_DWELL_TIME_MINUTES, timeDwelled)) {
+                            if (event.isEntered()) {
+                                Timber.v(" inside %s, waited %s, staying", event.getName(), timeSpentToHMS(timeDwelled));
+                                entryEvent = event;
+                            }
+                            else {
+                                Timber.v(" inside %s, waited %s, moving to next", event.getName(), timeSpentToHMS(timeDwelled));
+                                state = State.WAITING_NEXT;
+                            }
+                        }
+                        else {
+                            Timber.v(" inside %s, waited %s, not long enough so staying", event.getName(), timeSpentToHMS(timeDwelled));
+                        }
+                    }
+                    else {
+                        Timber.v(" inside %s but found %s, resetting to new place", entryEvent.getName(), event.getName());
+                        //reset, different place
+                        entryEvent = event;
+                    }
+                    break;
+                case WAITING_NEXT:
+                    Map<TimeUnit, Long> timeDwelled =
+                            computeDiff(previousEvent.getDate(), event.getDate());
+                    if (!entryEvent.equals(event)
+                           || isLongEnough(MINIMUM_DWELL_TIME_MINUTES, timeDwelled)) {
+                            Timber.v(" %s waiting, found %s, going to new event, waited %s", entryEvent.getName(), event.getName(), timeSpentToHMS(timeDwelled));
+                            if (entryEvent.equals(event) && !event.isEntered()) {
+                                Timber.v(" Printing events for %s, entry @%s exit @%s",entryEvent.getName(), entryEvent.getDate().toString(), previousEvent.getDate().toString());
+                                appendEvent(eventsAsString, entryEvent, event);
+                            }
+                            else {
+                                Timber.v(" Printing events for %s, entry @%s exit @%s",entryEvent.getName(), entryEvent.getDate().toString(), event.getDate().toString());
+                                appendEvent(eventsAsString, entryEvent, previousEvent);
+                            }
+                            entryEvent = event;
+                            state = State.INSIDE;
+                    }
+                    else {
+                        Timber.v(" Staying in waiting for new event");
+                    }
+                    break;
             }
-            else if (!event.isEntered() && insidePlace
-                    && event.getName().equals(entryEvent.getName())) {
-                //exiting the place we previously entered
-                Map<TimeUnit, Long> timeDwelled =
-                        computeDiff(entryEvent.getDate(), event.getDate());
-                if (isLongEnough(MINIMUM_DWELL_TIME_MINUTES, timeDwelled)) {
-                    SimpleDateFormat formatter = new SimpleDateFormat("MMM d, H:mm");
-                    eventsAsString.append(event.getName());
-                    eventsAsString.append(" @");
-                    eventsAsString.append(formatter.format(entryEvent.getDate()));
-                    eventsAsString.append(": ");
-                    eventsAsString.append(timeSpentToHMS(timeDwelled));
-                    eventsAsString.append("\n");
-                    insidePlace = false;
-                }
-            }
+            previousEvent = event;
         }
         return eventsAsString.toString();
     }
 
+    private static void appendEvent(@NonNull StringBuilder eventsAsString, @NonNull Event entryEvent,
+                                    @NonNull Event event) {
+        Map<TimeUnit, Long> timeDwelled =
+                computeDiff(entryEvent.getDate(), event.getDate());
+        Timber.v("Diffing %s & %s", entryEvent.getDate(), event.getDate());
+        SimpleDateFormat formatter = new SimpleDateFormat("MMM d, H:mm", Locale.US);
+        eventsAsString.append(event.getName());
+        eventsAsString.append(" @");
+        eventsAsString.append(formatter.format(entryEvent.getDate()));
+        eventsAsString.append(": ");
+        eventsAsString.append(timeSpentToHMS(timeDwelled));
+        eventsAsString.append("\n");
+    }
+
     private static StringBuilder timeSpentToHMS(@NonNull Map<TimeUnit, Long> timeDwelled) {
         StringBuilder timeAsString = new StringBuilder();
+        Timber.v("timeSpentToHMS %s",timeDwelled.values().toString());
         if (timeDwelled.get(TimeUnit.DAYS) > 0) {
             timeAsString.append(timeDwelled.get(TimeUnit.DAYS));
             timeAsString.append("d ");

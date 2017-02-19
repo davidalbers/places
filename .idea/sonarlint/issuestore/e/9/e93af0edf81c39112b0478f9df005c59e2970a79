@@ -1,6 +1,0 @@
-
-¢squid:S1186"€Add a nested comment explaining why this method is empty, throw an UnsupportedOperationException or complete the implementation.(´Ò³ìşÿÿÿÿ8½ä•Áœ+
-{squid:S1450"_Remove the "mGoogleApiClient" field and declare it as a local variable in the relevant methods.(Ÿõ¸Ú8Íş“Áœ+
-squid:S1186"€Add a nested comment explaining why this method is empty, throw an UnsupportedOperationException or complete the implementation.(·Îîó8½ä•Áœ+
-¢squid:S1186"€Add a nested comment explaining why this method is empty, throw an UnsupportedOperationException or complete the implementation.(éô©¥şÿÿÿÿ8½ä•Áœ+
-Psquid:S1068"4Remove this unused "mGoogleApiClient" private field.(Ÿõ¸Ú8Íş“Áœ+
